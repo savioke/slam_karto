@@ -156,17 +156,22 @@ SlamKarto::SlamKarto() :
         vis_thread_(NULL),
         marker_count_(0),
         solver_loader_("slam_karto", "karto::SLAMSolver"),
-        tf_(ros::Duration(1000))
+        tf_(ros::Duration(10000))
 {
   map_to_odom_.setIdentity();
   // Retrieve parameters
   ros::NodeHandle private_nh_("~");
   if(!private_nh_.getParam("odom_frame", odom_frame_))
     odom_frame_ = "odom";
+  
   if(!private_nh_.getParam("map_frame", map_frame_))
     map_frame_ = "map";
+ 
   if(!private_nh_.getParam("base_frame", base_frame_))
     base_frame_ = "base_link";
+
+  ROS_INFO("SLAM map_frame: %s, odom_frame: %s, base_frame: %s", map_frame_.c_str(), odom_frame_.c_str(), base_frame_.c_str());
+
   if(!private_nh_.getParam("throttle_scans", throttle_scans_))
     throttle_scans_ = 1;
   double tmp;
@@ -400,7 +405,7 @@ SlamKarto::SlamKarto() :
     }
   }
   mapper_->SetScanSolver(solver_.get());
-
+  solver_->setFrameId(map_frame_);
   vis_thread_ = new boost::thread(boost::bind(&SlamKarto::visLoop, this, vis_publish_period));
 }
 

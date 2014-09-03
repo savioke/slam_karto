@@ -12,6 +12,9 @@ class SLAMSolver : public karto::ScanSolver
 {
   public:
     virtual void publishGraphVisualization(visualization_msgs::MarkerArray &marray)=0;
+    inline void setFrameId(std::string &frame_id){map_frame_id_=frame_id;};
+  protected:
+    std::string map_frame_id_;
 };
 
 };
