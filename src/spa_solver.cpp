@@ -16,36 +16,36 @@
  */
 
 #include <slam_karto/spa_solver.h>
-#include <slam_karto/slam_solver.h>
 #include <open_karto/Karto.h>
 
 #include "ros/console.h"
 
 #include<pluginlib/class_list_macros.h>
 
-using karto_plugins::SpaSolver;
 
-SpaSolver::SpaSolver() : marker_count_(0)
+namespace karto_plugins {
+
+SPASolver::SPASolver() : marker_count_(0)
 {
 
 }
 
-SpaSolver::~SpaSolver()
+SPASolver::~SPASolver()
 {
 
 }
 
-void SpaSolver::Clear()
+void SPASolver::Clear()
 {
   corrections.clear();
 }
 
-const karto::ScanSolver::IdPoseVector& SpaSolver::GetCorrections() const
+const karto::ScanSolver::IdPoseVector& SPASolver::GetCorrections() const
 {
   return corrections;
 }
 
-void SpaSolver::Compute()
+void SPASolver::Compute()
 {
   corrections.clear();
 
@@ -62,14 +62,14 @@ void SpaSolver::Compute()
   }
 }
 
-void SpaSolver::AddNode(karto::Vertex<karto::LocalizedRangeScan>* pVertex)
+void SPASolver::AddNode(karto::Vertex<karto::LocalizedRangeScan>* pVertex)
 {
   karto::Pose2 pose = pVertex->GetObject()->GetCorrectedPose();
   Eigen::Vector3d vector(pose.GetX(), pose.GetY(), pose.GetHeading());
   m_Spa.addNode(vector, pVertex->GetObject()->GetUniqueId());
 }
 
-void SpaSolver::AddConstraint(karto::Edge<karto::LocalizedRangeScan>* pEdge)
+void SPASolver::AddConstraint(karto::Edge<karto::LocalizedRangeScan>* pEdge)
 {
   karto::LocalizedRangeScan* pSource = pEdge->GetSource()->GetObject();
   karto::LocalizedRangeScan* pTarget = pEdge->GetTarget()->GetObject();
@@ -90,7 +90,7 @@ void SpaSolver::AddConstraint(karto::Edge<karto::LocalizedRangeScan>* pEdge)
   m_Spa.addConstraint(pSource->GetUniqueId(), pTarget->GetUniqueId(), mean, m);
 }
 
-void SpaSolver::publishGraphVisualization(visualization_msgs::MarkerArray &marray)
+void SPASolver::publishGraphVisualization(visualization_msgs::MarkerArray &marray)
 {
   std::vector<float> graph;
   getGraph(graph);
@@ -165,4 +165,7 @@ void SpaSolver::publishGraphVisualization(visualization_msgs::MarkerArray &marra
 
   marker_count_ = marray.markers.size();
 }
-PLUGINLIB_EXPORT_CLASS(karto_plugins::SpaSolver, karto::SLAMSolver)
+
+} //namespace karto_plugins
+
+PLUGINLIB_EXPORT_CLASS(karto_plugins::SPASolver, karto::SLAMSolver)

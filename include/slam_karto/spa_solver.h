@@ -34,11 +34,11 @@ typedef std::vector<karto::Matrix3> CovarianceVector;
 
 namespace karto_plugins
 {
-  class SpaSolver : public karto::SLAMSolver 
+  class SPASolver : public karto::SLAMSolver 
   {
   public:
-    SpaSolver();
-    virtual ~SpaSolver();
+    SPASolver();
+    virtual ~SPASolver();
 
   public:
     virtual void Clear();

@@ -38,6 +38,7 @@
 
 #include <open_karto/Mapper.h>
 
+#include <slam_karto/slam_solver.h>
 #include <slam_karto/spa_solver.h>
 
 #include <boost/thread.hpp>
@@ -133,6 +134,7 @@ class SlamKarto
     karto::Mapper* mapper_;
     karto::Dataset* dataset_;
     //SpaSolver* solver_;
+    pluginlib::ClassLoader<karto::SLAMSolver> solver_loader_;
     boost::shared_ptr<karto::SLAMSolver> solver_;
     std::map<std::string, karto::LaserRangeFinder*> lasers_;
     std::map<std::string, bool> lasers_inverted_;
@@ -152,7 +154,9 @@ SlamKarto::SlamKarto() :
         laser_count_(0),
         transform_thread_(NULL),
         vis_thread_(NULL),
-        marker_count_(0)
+        marker_count_(0),
+        solver_loader_("slam_karto", "karto::SLAMSolver"),
+        tf_(ros::Duration(1000))
 {
   map_to_odom_.setIdentity();
   // Retrieve parameters
@@ -189,8 +193,8 @@ SlamKarto::SlamKarto() :
   sst_ = node_.advertise<nav_msgs::OccupancyGrid>("map", 1, true);
   sstm_ = node_.advertise<nav_msgs::MapMetaData>("map_metadata", 1, true);
   ss_ = node_.advertiseService("dynamic_map", &SlamKarto::mapCallback, this);
-  scan_filter_sub_ = new message_filters::Subscriber<sensor_msgs::LaserScan>(node_, "scan", 5);
-  scan_filter_ = new tf::MessageFilter<sensor_msgs::LaserScan>(*scan_filter_sub_, tf_, odom_frame_, 5);
+  scan_filter_sub_ = new message_filters::Subscriber<sensor_msgs::LaserScan>(node_, "scan", 50000);
+  scan_filter_ = new tf::MessageFilter<sensor_msgs::LaserScan>(*scan_filter_sub_, tf_, odom_frame_, 50000);
   scan_filter_->registerCallback(boost::bind(&SlamKarto::laserCallback, this, _1));
   marker_publisher_ = node_.advertise<visualization_msgs::MarkerArray>("visualization_marker_array",1);
 
@@ -346,12 +350,12 @@ SlamKarto::SlamKarto() :
   }
 
   // Set solver to be used in loop closure
-  pluginlib::ClassLoader<karto::SLAMSolver> solver_loader("open_karto", "karto::SLAMSolver");
+
   if(solver_type_ == "SPA")
   {
     try
     {
-      solver_ = solver_loader.createInstance("karto_plugins::SpaSolver");
+      solver_ = solver_loader_.createInstance("karto_plugins::SPASolver");
       ROS_INFO("Loaded SPA solver plugin");
     }
     catch(pluginlib::PluginlibException& ex)
@@ -361,16 +365,39 @@ SlamKarto::SlamKarto() :
   }
   else if(solver_type_ == "G2O")
   {
-   /* try
+    try
     {
-      solver_ = solver_loader.createInstance("karto_plugins::SpaSolver");
-      ROS_INFO("Loaded SPA solver plugin");
+      solver_ = solver_loader_.createInstance("karto_plugins::G2OSolver");
+      ROS_INFO("Loaded G2O solver plugin");
     }
     catch(pluginlib::PluginlibException& ex)
     {
       ROS_ERROR("The plugin failed to load for some reason. Error: %s", ex.what());
-    }*/
- 
+    }
+  }
+  else if(solver_type_ == "MAXMIX")
+  {
+    try
+    {
+      solver_ = solver_loader_.createInstance("karto_plugins::VertigoMaxMixSolver");
+      ROS_INFO("Loaded Vertigo MaxMix solver plugin");
+    }
+    catch(pluginlib::PluginlibException& ex)
+    {
+      ROS_ERROR("The plugin failed to load for some reason. Error: %s", ex.what());
+    }
+  }
+  else if(solver_type_ == "SWITCHABLE")
+  {
+    try
+    {
+      solver_ = solver_loader_.createInstance("karto_plugins::VertigoSwitchableSolver");
+      ROS_INFO("Loaded Vertigo Switchable solver plugin");
+    }
+    catch(pluginlib::PluginlibException& ex)
+    {
+      ROS_ERROR("The plugin failed to load for some reason. Error: %s", ex.what());
+    }
   }
   mapper_->SetScanSolver(solver_.get());
 

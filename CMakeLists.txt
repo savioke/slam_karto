@@ -23,13 +23,20 @@ include_directories(
   ${EIGEN_INCLUDE_DIRS})
 add_definitions(${EIGEN_DEFINITIONS})
 
-catkin_package()
+catkin_package(
+  INCLUDE_DIRS include
+  LIBRARIES karto_spa_plugin
+  )
 
-add_library(karto_plugins src/spa_solver.cpp)
+add_library(karto_spa_plugin src/spa_solver.cpp)
 add_executable(slam_karto src/slam_karto.cpp)
 
-target_link_libraries(karto_plugins ${catkin_LIBRARIES})
-target_link_libraries(slam_karto ${catkin_LIBRARIES})
+target_link_libraries(karto_spa_plugin ${catkin_LIBRARIES})
+target_link_libraries(slam_karto ${catkin_LIBRARIES} karto_spa_plugin)
+
+install(DIRECTORY include/${PROJECT_NAME}/
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+)
 install(TARGETS slam_karto
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

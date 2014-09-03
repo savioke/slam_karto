@@ -37,7 +37,7 @@
   <run_depend>pluginlib</run_depend>
 
   <export>
-    <open_karto plugin="${prefix}/karto_plugins.xml" />
+    <slam_karto plugin="${prefix}/spa_plugin.xml" />
   </export>
 
 </package>
