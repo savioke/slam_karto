@@ -48,6 +48,7 @@
 #include <vector>
 
 #include <pluginlib/class_loader.h>
+#include <slam_karto/localized_range_scan_stamped.h>
 
 // compute linear index for given map coords
 #define MAP_IDX(sx, i, j) ((sx) * (j) + (i))
@@ -73,6 +74,11 @@ class SlamKarto
     void publishLoop(double transform_publish_period);
     void visLoop(double vis_publish_period);
     void publishGraphVisualization();
+
+
+    // timing stuff to support calibration
+    bool init_time_;
+    ros::Time time_offset_;
 
     // ROS handles
     ros::NodeHandle node_;
@@ -156,7 +162,8 @@ SlamKarto::SlamKarto() :
         vis_thread_(NULL),
         marker_count_(0),
         solver_loader_("slam_karto", "karto::SLAMSolver"),
-        tf_(ros::Duration(10000))
+        tf_(ros::Duration(10000)),
+        init_time_(false)
 {
   map_to_odom_.setIdentity();
   // Retrieve parameters
@@ -720,8 +727,17 @@ SlamKarto::addScan(karto::LaserRangeFinder* laser,
   }
   
   // create localized range scan
+ 
+  if(!init_time_)
+  {
+    time_offset_ = scan->header.stamp;
+    init_time_ = true;
+  }
+  double tStamp = (scan->header.stamp-time_offset_).toNSec();
+  
   karto::LocalizedRangeScan* range_scan = 
-    new karto::LocalizedRangeScan(laser->GetName(), readings);
+    new karto::LocalizedRangeScanStamped(laser->GetName(), readings, tStamp/1e9);
+  
   range_scan->SetOdometricPose(karto_pose);
   range_scan->SetCorrectedPose(karto_pose);
 

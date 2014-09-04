@@ -5,7 +5,7 @@ Assumes an 'odom_combined' frame, that provides reasonably accurate odometry
 
 <launch>
 
-  <include file="$(find odometry_modifier)/launch/odom_modifier.launch"/>
+  <!--include file="$(find odometry_modifier)/launch/odom_modifier.launch"/ -->
 
   <node pkg="slam_karto" type="slam_karto" name="slam_karto" output="screen">
 
@@ -45,12 +45,12 @@ Assumes an 'odom_combined' frame, that provides reasonably accurate odometry
     <param name="use_response_expansion" value="true"/>
 
     <!-- SLAM Karto ROS parameters -->
-    <param name="solver_type" value="G2O"/>
-    <param name="map_frame" value="map_calibrated"/>
-    <param name="odom_frame" value="odom_calibrated"/>
+    <param name="solver_type" value="MAXMIX"/>
+    <param name="map_frame" value="map"/>
+    <param name="odom_frame" value="odom"/>
 
     <!-- G2O only -->
-    <param name="use_interactive_switches" value="false"/>
+    <param name="use_interactive_switches" value="true"/>
     <param name="calibration_mode" value="true"/>
     <param name="g2o_online_optimization" value="false"/>
     <param name="g2o_num_iterations" value="30"/>
