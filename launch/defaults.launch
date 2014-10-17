@@ -1,0 +1,100 @@
+<!--
+Provides a reasonable set of parameters for running Karto on a robot
+Assumes an 'odom_combined' frame, that provides reasonably accurate odometry
+-->
+
+<launch>
+  <node pkg="slam_karto" type="slam_karto" name="slam_karto" output="screen">
+    <!-- Robot specific stuff -->
+    <remap from="scan" to="scan_slam"/>
+    <param name="odom_frame" value="odom"/>
+    <param name="map_update_interval" value="10"/>
+    <param name="resolution" value="0.05"/>
+
+    <!-- Exposed parameters from open_karto -->
+    <!-- Use scan matching, most real world situations should set this to true (default: true) -->
+    <param name="use_scan_matching" value="true"/>
+
+    <!-- Use the centroid of the point readings as the position of the scan (default: true)-->
+    <param name="use_scan_barycenter" value="true"/>
+
+    <!-- If new scan is further than this distance from the previous scan, use it (default: 0.2) -->
+    <param name="minimum_travel_distance" value="0.2"/>
+
+    <!-- Minimum heading change between scans that are used for matching. (default: 20 degrees) -->
+    <param name="minimum_travel_heading" value="0.35"/>
+
+    <!-- Length of chain stored for scan matching. Should be scan_buffer_max_scan_distance/minimum_travel_distance. (default: 70) -->
+    <param name="scan_buffer_size" value="70"/>
+
+    <!-- Maximum distance between first and last scans in chain stored for scan matching (default: 20)-->
+    <param name="scan_buffer_max_scan_distance" value="20"/>
+
+    <!-- Increase search space if no good matches are initially found. (default: false) -->
+    <param name="use_response_expansion" value="false"/>
+
+    <!-- Variance of penalty for deviating from odometry when scan-matching. Use lower values if the robot's odometer is more accurate. Default value is 0.3.-->
+    <param name="distance_variance_penalty" value="0.3"/>
+    
+    <!-- Minimum value of the penalty multiplier so scores do not become too small. (default: 0.5) --> 
+    <param name="minimum_dist_penalty" value="0.5"/>
+    
+   
+    <!-- Variance of penalty for deviating from odomety when scan matching. Use lower values if the robot's odometer is more accurate. (default: 20 degrees ^2) -->
+    <param name="angle_variance_penalty" value="0.1225"/>
+
+    <!-- Minimum value of the penalty multiplier so scores do not become too small. Angles are not very accurate and so deviations from odometer should not cause scores to drop precipitously. (default: 0.9) -->
+    <param name="minimum_angle_penalty" value="0.9"/>
+
+    <!-- Scans are linked only if the correlation response is greater than this value. (default: 0.6) --> 
+    <param name="link_match_min_response_fine" value="0.6"/>
+
+    <!-- Maximum distance between linked scans. Scans that are farther apart will not be linked regardless of the correlation response value. If this number is large, many scans will be considered near. This can cause the mapper to aggressively try to close loops with scans that aren't linked to the current scan even though they aren't that close.  (default: 5.0) -->
+    <param name="link_scan_max_distance" value="5.0"/>
+
+    <!-- The size of the search grid used by the matcher when matching sequential scans. Default value is 0.3m which tells the matcher to use a 30cm x 30cm grid -->
+    <param name="corr_search_space_dim" value="0.3"/>
+   
+    <!-- The resolution (size of a grid cell) in the correlation grid. (default: 0.01) -->
+    <param name="corr_search_space_res" value="0.01"/>
+    
+    <!-- The point readings are smeared by this value in X and Y to create a smoother response. Use higher values for environments that do not have crisp outlines (eg outdoors). (default: 0.03m) --> 
+    <param name="corr_search_space_smear_dev" value="0.03"/>
+   
+    <!-- The range of angles to search in each direction from the robot's heading during a coarse search. Default value is the equivalent value in radians of 20 degrees. -->
+    <param name="coarse_search_angle_offset" value="0.35"/>
+
+    <!-- The range of angles to search in each direction from the robot's heading during a finer search. Default value is the equivalent value in radians of 0.2 degrees. -->
+    <param name="fine_search_angle_offset" value="0.0035"/>
+
+    <!-- Resolution of angles to search during a coarse search Default value is the equivalent value in radians of 2 degrees.-->
+    <param name="coarse_angle_resolution" value="0.035"/>
+
+    <!-- The size of the search grid used by the matcher when detecting loop closures. Default value is 8.0 meters which tells the matcher to use a 8m x 8m grid. -->
+    <param name="loop_search_space_dim" value="8"/>
+
+    <!-- The resolution (size of a grid cell) of the correlation grid used by the matcher to determine a possible loop closure. Default value is 0.05 meters.-->
+    <param name="loop_search_space_res" value="0.05"/>
+
+    <!-- The point readings are smeared by this value in X and Y to create a smoother response. Used by the matcher to determine a possible loop closure match. Default value is 0.03 meters. -->
+    <param name="loop_search_space_smear_dev" value="0.03"/>
+
+    <!-- Scans less than this distance from the current position will be considered for a match in loop closure. Default value is 4.0 meters.-->
+    <param name="loop_search_max_distance" value="4.0"/>
+
+    <!-- When the loop closure detection finds a candidate it must be part of a large set of linked scans. If the chain of scans is less than this value, we do not attempt to close the loop. Default value is 10.-->
+    <param name="loop_match_min_chain_size" value="10"/>
+    
+    <!-- The co-variance values for a possible loop closure have to be less than this value to consider a viable solution. This applies to the coarse search. Default value is 0.16.-->
+    <param name="loop_match_max_variance_coarse" value="0.16"/>
+
+    <!-- If response is larger then this, then initiate loop closure search at the coarse resolution. Default value is 0.7. -->
+    <param name="loop_match_min_response_coarse" value="0.7"/>
+
+    <!-- If response is larger then this, then initiate loop closure search at the fine resolution. Default value is 0.7.-->
+    <param name="loop_match_min_response_fine" value="0.7"/>
+
+    <param name="do_loop_closing" value="true"/>
+
+  </node>
+</launch>

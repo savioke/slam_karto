@@ -50,6 +50,8 @@
 #include <pluginlib/class_loader.h>
 #include <slam_karto/localized_range_scan_stamped.h>
 
+#include <std_msgs/Float64.h>
+
 // compute linear index for given map coords
 #define MAP_IDX(sx, i, j) ((sx) * (j) + (i))
 
@@ -71,7 +73,9 @@ class SlamKarto
                  karto::Pose2& karto_pose);
     bool updateMap();
     void publishTransform();
+    void publishResponse();
     void publishLoop(double transform_publish_period);
+    void responseLoop(double response_publish_period);
     void visLoop(double vis_publish_period);
     void publishGraphVisualization();
 
@@ -89,6 +93,8 @@ class SlamKarto
     ros::Publisher sst_;
     ros::Publisher marker_publisher_;
     ros::Publisher sstm_;
+    ros::Publisher response_publisher_;
+
     ros::ServiceServer ss_;
 
     // The map that will be published / send to service callers
@@ -150,6 +156,7 @@ class SlamKarto
     int laser_count_;
     boost::thread* transform_thread_;
     boost::thread* vis_thread_;
+    boost::thread* response_thread_;
     tf::Transform map_to_odom_;
     unsigned marker_count_;
     bool inverted_laser_;
@@ -196,6 +203,8 @@ SlamKarto::SlamKarto() :
   private_nh_.param("transform_publish_period", transform_publish_period, 0.05);
   double vis_publish_period;
   private_nh_.param("vis_publish_period", vis_publish_period, 2.0);
+  double response_publish_period;
+  private_nh_.param("response_publish_period", response_publish_period, 1.0);
 
   if(!private_nh_.getParam("solver_type", solver_type_))
     solver_type_="SPA";
@@ -210,10 +219,16 @@ SlamKarto::SlamKarto() :
   scan_filter_->registerCallback(boost::bind(&SlamKarto::laserCallback, this, _1));
   marker_publisher_ = node_.advertise<visualization_msgs::MarkerArray>("visualization_marker_array",1);
 
+  // Publish the most recent loop closure response
+  response_publisher_ = node_.advertise<std_msgs::Float64>("loop_closure_response",2);
+
   // Create a thread to periodically publish the latest map->odom
   // transform; it needs to go out regularly, uninterrupted by potentially
   // long periods of computation in our main loop.
   transform_thread_ = new boost::thread(boost::bind(&SlamKarto::publishLoop, this, transform_publish_period));
+
+  // Create a thread to periodically publish the loop closure response
+  response_thread_ = new boost::thread(boost::bind(&SlamKarto::responseLoop, this, response_publish_period));
 
   // Initialize Karto structures
   mapper_ = new karto::Mapper();
@@ -418,6 +433,11 @@ SlamKarto::SlamKarto() :
 
 SlamKarto::~SlamKarto()
 {
+  if(response_thread_)
+  {
+    response_thread_->join();
+    delete response_thread_;
+  }
   if(transform_thread_)
   {
     transform_thread_->join();
@@ -442,6 +462,19 @@ SlamKarto::~SlamKarto()
   // I'm supposed to do that.
 }
 
+void SlamKarto::responseLoop(double response_publish_period)
+{
+  if(response_publish_period == 0)
+    return;
+
+  ros::Rate r(1.0 / response_publish_period);
+  while(ros::ok())
+  {
+    publishResponse();
+    r.sleep();
+  }
+}
+
 void
 SlamKarto::publishLoop(double transform_publish_period)
 {
@@ -454,6 +487,14 @@ SlamKarto::publishLoop(double transform_publish_period)
     publishTransform();
     r.sleep();
   }
+}
+
+void SlamKarto::publishResponse()
+{
+  double response = mapper_->GetLoopClosureResponse();
+  std_msgs::Float64 response_msg;
+  response_msg.data = response;
+  response_publisher_.publish(response_msg); 
 }
 
 void
