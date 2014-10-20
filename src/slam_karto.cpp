@@ -167,10 +167,12 @@ SlamKarto::SlamKarto() :
         laser_count_(0),
         transform_thread_(NULL),
         vis_thread_(NULL),
+        response_thread_(NULL),
         marker_count_(0),
         solver_loader_("slam_karto", "karto::SLAMSolver"),
         tf_(ros::Duration(10000)),
-        init_time_(false)
+        init_time_(false),
+        mapper_(NULL)
 {
   map_to_odom_.setIdentity();
   // Retrieve parameters
@@ -227,10 +229,7 @@ SlamKarto::SlamKarto() :
   // long periods of computation in our main loop.
   transform_thread_ = new boost::thread(boost::bind(&SlamKarto::publishLoop, this, transform_publish_period));
 
-  // Create a thread to periodically publish the loop closure response
-  response_thread_ = new boost::thread(boost::bind(&SlamKarto::responseLoop, this, response_publish_period));
-
-  // Initialize Karto structures
+    // Initialize Karto structures
   mapper_ = new karto::Mapper();
   dataset_ = new karto::Dataset();
   
@@ -428,6 +427,9 @@ SlamKarto::SlamKarto() :
   }
   mapper_->SetScanSolver(solver_.get());
   solver_->setFrameId(map_frame_);
+  
+  // Create a thread to periodically publish the loop closure response
+  response_thread_ = new boost::thread(boost::bind(&SlamKarto::responseLoop, this, response_publish_period));
   vis_thread_ = new boost::thread(boost::bind(&SlamKarto::visLoop, this, vis_publish_period));
 }
 
@@ -464,6 +466,8 @@ SlamKarto::~SlamKarto()
 
 void SlamKarto::responseLoop(double response_publish_period)
 {
+  if(mapper_!=NULL)
+  {
   if(response_publish_period == 0)
     return;
 
@@ -472,6 +476,7 @@ void SlamKarto::responseLoop(double response_publish_period)
   {
     publishResponse();
     r.sleep();
+  }
   }
 }
 
@@ -491,10 +496,13 @@ SlamKarto::publishLoop(double transform_publish_period)
 
 void SlamKarto::publishResponse()
 {
-  double response = mapper_->GetLoopClosureResponse();
-  std_msgs::Float64 response_msg;
-  response_msg.data = response;
-  response_publisher_.publish(response_msg); 
+  if(mapper_ != NULL)
+  {
+    double response = mapper_->GetLoopClosureResponse();
+    std_msgs::Float64 response_msg;
+    response_msg.data = response;
+    response_publisher_.publish(response_msg); 
+  }
 }
 
 void
