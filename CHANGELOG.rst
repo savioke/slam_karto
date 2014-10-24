@@ -2,8 +2,8 @@
 Changelog for package slam_karto
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+100.7.2 (2014-10-24)
+--------------------
 * Removed a bunch of old launch files
 * SlamKarto still not publishing loop closures to match karto optimization...
 * Added default launch file and publishing of response strength in loop closure
