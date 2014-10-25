@@ -2,6 +2,11 @@
 Changelog for package slam_karto
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Install pluginlib xml file
+* Contributors: Jonathan Binney
+
 100.7.2 (2014-10-24)
 --------------------
 * Removed a bunch of old launch files
