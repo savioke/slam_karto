@@ -2,8 +2,8 @@
 Changelog for package slam_karto
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+100.7.4 (2014-10-24)
+--------------------
 * Install karto_spa_plugin
 * Contributors: Jon Binney
 
