@@ -2,6 +2,11 @@
 Changelog for package slam_karto
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Install karto_spa_plugin
+* Contributors: Jon Binney
+
 100.7.3 (2014-10-24)
 --------------------
 * Install pluginlib xml file
