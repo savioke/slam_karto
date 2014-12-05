@@ -79,7 +79,6 @@ class SlamKarto
     void visLoop(double vis_publish_period);
     void publishGraphVisualization();
 
-
     // timing stuff to support calibration
     bool init_time_;
     ros::Time time_offset_;
@@ -160,6 +159,12 @@ class SlamKarto
     tf::Transform map_to_odom_;
     unsigned marker_count_;
     bool inverted_laser_;
+
+    // Cosmetic
+    bool got_initial_pose_;
+    karto::Pose2 initial_pose_;
+    tf::Stamped<tf::Pose> initial_odom_;
+
 };
 
 SlamKarto::SlamKarto() :
@@ -174,6 +179,7 @@ SlamKarto::SlamKarto() :
         init_time_(false),
         mapper_(NULL)
 {
+  got_initial_pose_ = false;
   map_to_odom_.setIdentity();
   // Retrieve parameters
   ros::NodeHandle private_nh_("~");
@@ -229,7 +235,7 @@ SlamKarto::SlamKarto() :
   // long periods of computation in our main loop.
   transform_thread_ = new boost::thread(boost::bind(&SlamKarto::publishLoop, this, transform_publish_period));
 
-    // Initialize Karto structures
+  // Initialize Karto structures
   mapper_ = new karto::Mapper();
   dataset_ = new karto::Dataset();
   
@@ -516,6 +522,7 @@ SlamKarto::publishTransform()
 karto::LaserRangeFinder*
 SlamKarto::getLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
 {
+
   // Check whether we know about this laser yet
   if(lasers_.find(scan->header.frame_id) == lasers_.end())
   {
@@ -539,7 +546,7 @@ SlamKarto::getLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
     }
 
     double yaw = tf::getYaw(laser_pose.getRotation());
-
+   
     ROS_INFO("laser %s's pose wrt base: %.3f %.3f %.3f",
 	     scan->header.frame_id.c_str(),
 	     laser_pose.getOrigin().x(),
@@ -586,6 +593,7 @@ SlamKarto::getLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
     laser->SetMinimumAngle(scan->angle_min);
     laser->SetMaximumAngle(scan->angle_max);
     laser->SetAngularResolution(scan->angle_increment);
+
     // TODO: expose this, and many other parameters
     //laser_->SetRangeThreshold(12.0);
 
@@ -617,10 +625,32 @@ SlamKarto::getOdomPose(karto::Pose2& karto_pose, const ros::Time& t)
   }
   double yaw = tf::getYaw(odom_pose.getRotation());
 
+  if(!got_initial_pose_)
+  {
+    got_initial_pose_ = true;
+    initial_pose_ = karto::Pose2(odom_pose.getOrigin().x(),
+                       odom_pose.getOrigin().y(),
+                       yaw);
+    initial_odom_ = odom_pose;
+
+  }
+
   karto_pose = 
           karto::Pose2(odom_pose.getOrigin().x(),
                        odom_pose.getOrigin().y(),
-                       yaw);
+                       yaw) - initial_pose_;
+
+  double x = karto_pose.GetX();
+  double y = karto_pose.GetY();
+  double th = initial_pose_.GetHeading();
+
+  double x_dash = x*cos(th) + y*sin(th);
+  double y_dash = -x*sin(th)+y*cos(th);
+
+  karto_pose.SetX(x_dash);
+  karto_pose.SetY(y_dash);
+  karto_pose.SetHeading(yaw-th);
+
   return true;
 }
 
@@ -654,7 +684,7 @@ SlamKarto::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
   karto::Pose2 odom_pose;
   if(addScan(laser, scan, odom_pose))
   {
-    ROS_DEBUG("added scan at pose: %.3f %.3f %.3f", 
+    ROS_INFO("added scan at pose: %.3f %.3f %.3f", 
               odom_pose.GetX(),
               odom_pose.GetY(),
               odom_pose.GetHeading());
@@ -710,7 +740,7 @@ SlamKarto::updateMap()
     map_.map.info.height = height;
     map_.map.data.resize(map_.map.info.width * map_.map.info.height);
   }
-
+ 
   for (kt_int32s y=0; y<height; y++)
   {
     for (kt_int32s x=0; x<width; x++) 
@@ -735,7 +765,7 @@ SlamKarto::updateMap()
       }
     }
   }
-  
+
   // Set the header information on the map
   map_.map.header.stamp = ros::Time::now();
   map_.map.header.frame_id = map_frame_;
@@ -802,9 +832,9 @@ SlamKarto::addScan(karto::LaserRangeFinder* laser,
     tf::Stamped<tf::Pose> odom_to_map;
     try
     {
-      tf_.transformPose(odom_frame_,tf::Stamped<tf::Pose> (tf::Transform(tf::createQuaternionFromRPY(0, 0, corrected_pose.GetHeading()),
-                                                                    tf::Vector3(corrected_pose.GetX(), corrected_pose.GetY(), 0.0)).inverse(),
-                                                                    scan->header.stamp, base_frame_),odom_to_map);
+      tf_.transformPose(odom_frame_,tf::Stamped<tf::Pose> (tf::Transform(tf::createQuaternionFromRPY(0, 0, corrected_pose.GetHeading()), tf::Vector3(corrected_pose.GetX(), corrected_pose.GetY(), 0.0)).inverse(), scan->header.stamp, base_frame_),odom_to_map);
+      ROS_INFO("Corrected pose is %f,%f,%f",corrected_pose.GetX(), corrected_pose.GetY(), corrected_pose.GetHeading());
+      ROS_INFO("Odom is %f,%f",odom_to_map.getOrigin()[0], odom_to_map.getOrigin()[1]);
     }
     catch(tf::TransformException e)
     {
@@ -815,9 +845,16 @@ SlamKarto::addScan(karto::LaserRangeFinder* laser,
     map_to_odom_mutex_.lock();
     map_to_odom_ = tf::Transform(tf::Quaternion( odom_to_map.getRotation() ),
                                  tf::Point(      odom_to_map.getOrigin() ) ).inverse();
+    ROS_INFO("Map to odom is %f,%f",map_to_odom_.getOrigin()[0], map_to_odom_.getOrigin()[1]);
     map_to_odom_mutex_.unlock();
 
+    /*tf::Transform laser_to_map = tf::Transform(tf::createQuaternionFromRPY(0, 0, corrected_pose.GetHeading()), tf::Vector3(corrected_pose.GetX(), corrected_pose.GetY(), 0.0)).inverse();
+    tf::Transform odom_to_laser = initial_odom_.inverse()*tf::Transform(tf::createQuaternionFromRPY(0, 0, karto_pose.GetHeading()), tf::Vector3(karto_pose.GetX(), karto_pose.GetY(), 0.0));
 
+    map_to_odom_mutex_.lock();
+    map_to_odom_ = (odom_to_laser * laser_to_map).inverse();
+    map_to_odom_mutex_.unlock();
+*/
     // Add the localized range scan to the dataset (for memory management)
     dataset_->Add(range_scan);
   }
