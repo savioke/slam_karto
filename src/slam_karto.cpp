@@ -833,8 +833,6 @@ SlamKarto::addScan(karto::LaserRangeFinder* laser,
     try
     {
       tf_.transformPose(odom_frame_,tf::Stamped<tf::Pose> (tf::Transform(tf::createQuaternionFromRPY(0, 0, corrected_pose.GetHeading()), tf::Vector3(corrected_pose.GetX(), corrected_pose.GetY(), 0.0)).inverse(), scan->header.stamp, base_frame_),odom_to_map);
-      ROS_INFO("Corrected pose is %f,%f,%f",corrected_pose.GetX(), corrected_pose.GetY(), corrected_pose.GetHeading());
-      ROS_INFO("Odom is %f,%f",odom_to_map.getOrigin()[0], odom_to_map.getOrigin()[1]);
     }
     catch(tf::TransformException e)
     {
