@@ -79,7 +79,6 @@ class SlamKarto
     void visLoop(double vis_publish_period);
     void publishGraphVisualization();
 
-
     // timing stuff to support calibration
     bool init_time_;
     ros::Time time_offset_;
@@ -160,6 +159,12 @@ class SlamKarto
     tf::Transform map_to_odom_;
     unsigned marker_count_;
     bool inverted_laser_;
+
+    // Cosmetic
+    bool got_initial_pose_;
+    karto::Pose2 initial_pose_;
+    tf::Stamped<tf::Pose> initial_odom_;
+
 };
 
 SlamKarto::SlamKarto() :
@@ -174,6 +179,7 @@ SlamKarto::SlamKarto() :
         init_time_(false),
         mapper_(NULL)
 {
+  got_initial_pose_ = false;
   map_to_odom_.setIdentity();
   // Retrieve parameters
   ros::NodeHandle private_nh_("~");
@@ -229,149 +235,149 @@ SlamKarto::SlamKarto() :
   // long periods of computation in our main loop.
   transform_thread_ = new boost::thread(boost::bind(&SlamKarto::publishLoop, this, transform_publish_period));
 
-    // Initialize Karto structures
+  // Initialize Karto structures
   mapper_ = new karto::Mapper();
   dataset_ = new karto::Dataset();
   
   // Karto parameters
   if(private_nh_.getParam("use_scan_matching", use_scan_matching_))
   {
-    ROS_INFO("Setting karto parameter use_scan_matching to %d", use_scan_matching_);
+    ROS_DEBUG_NAMED("slam_karto", "Setting karto parameter use_scan_matching to %d", use_scan_matching_);
     static_cast<karto::Parameter<bool> *>(mapper_->GetParameterManager()->Get("UseScanMatching"))->SetValue(use_scan_matching_);
   }
   if(private_nh_.getParam("use_scan_barycenter", use_scan_barycenter_))
   {
-    ROS_INFO("Setting karto parameter use_scan_barycenter to %d", use_scan_barycenter_);
+    ROS_DEBUG_NAMED("slam_karto", "Setting karto parameter use_scan_barycenter to %d", use_scan_barycenter_);
     static_cast<karto::Parameter<bool> *>(mapper_->GetParameterManager()->Get("UseScanBarycenter"))->SetValue(use_scan_barycenter_);
   }
   if(private_nh_.getParam("minimum_travel_distance", min_travel_distance_))
   {
-    ROS_INFO("Setting karto parameter MinimumTravelDistance to %f", min_travel_distance_);
+    ROS_DEBUG_NAMED("slam_karto", "Setting karto parameter MinimumTravelDistance to %f", min_travel_distance_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("MinimumTravelDistance"))->SetValue(min_travel_distance_);
   }
   if(private_nh_.getParam("minimum_travel_heading", min_travel_heading_))
   {
-    ROS_INFO("Setting karto parameter MinimumTravelHeading to %f", min_travel_heading_);
+    ROS_DEBUG_NAMED("slam_karto", "Setting karto parameter MinimumTravelHeading to %f", min_travel_heading_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("MinimumTravelHeading"))->SetValue(min_travel_heading_);
   }
   if(private_nh_.getParam("scan_buffer_size", scan_buffer_size_))
   {
-    ROS_INFO("Setting karto parameter ScanBufferSize to %d", scan_buffer_size_);
+    ROS_DEBUG_NAMED("slam_karto", "Setting karto parameter ScanBufferSize to %d", scan_buffer_size_);
     static_cast<karto::Parameter<int> *>(mapper_->GetParameterManager()->Get("ScanBufferSize"))->SetValue(scan_buffer_size_);
   }
   if(private_nh_.getParam("scan_buffer_max_scan_distance", scan_buffer_max_scan_distance_))
   {
-    ROS_INFO("Setting karto parameter ScanBufferMaximumScanDistance to %f", scan_buffer_max_scan_distance_);
+    ROS_DEBUG_NAMED("slam_karto", "Setting karto parameter ScanBufferMaximumScanDistance to %f", scan_buffer_max_scan_distance_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("ScanBufferMaximumScanDistance"))->SetValue(scan_buffer_max_scan_distance_);
   }
   if(private_nh_.getParam("link_match_min_response_fine", link_match_min_response_fine_))
   {
-    ROS_INFO("Setting karto parameter LinkMatchMinimumResposeFine to %f", link_match_min_response_fine_);
+    ROS_DEBUG_NAMED("slam_karto", "Setting karto parameter LinkMatchMinimumResposeFine to %f", link_match_min_response_fine_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("LinkMatchMinimumResponseFine"))->SetValue(link_match_min_response_fine_);
   }
   if(private_nh_.getParam("link_scan_max_distance", link_scan_max_distance_))
   {
-    ROS_INFO("Setting karto parameter LinkScanMaximumDistance to %f", link_scan_max_distance_);
+    ROS_DEBUG_NAMED("slam_karto", "Setting karto parameter LinkScanMaximumDistance to %f", link_scan_max_distance_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("LinkScanMaximumDistance"))->SetValue(link_scan_max_distance_);
   }
   if(private_nh_.getParam("loop_search_max_distance", loop_search_max_distance_))
   {
-    ROS_INFO("Setting karto parameter LoopSearchMaximumDistance to %f", loop_search_max_distance_);
+    ROS_DEBUG_NAMED("slam_karto", "Setting karto parameter LoopSearchMaximumDistance to %f", loop_search_max_distance_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("LoopSearchMaximumDistance"))->SetValue(loop_search_max_distance_);
   }
   if(private_nh_.getParam("do_loop_closing", do_loop_closing_))
   {
-    ROS_INFO("Setting karto parameter DoLoopClosing to %d", do_loop_closing_);
+    ROS_DEBUG_NAMED("slam_karto", "Setting karto parameter DoLoopClosing to %d", do_loop_closing_);
     static_cast<karto::Parameter<bool> *>(mapper_->GetParameterManager()->Get("DoLoopClosing"))->SetValue(do_loop_closing_);
   }
   if(private_nh_.getParam("loop_match_min_chain_size", loop_match_min_chain_size_))
   {
-    ROS_INFO("Setting karto parameter LoopMatchMinimumChainSize to %d", loop_match_min_chain_size_);
+    ROS_DEBUG_NAMED("slam_karto", "Setting karto parameter LoopMatchMinimumChainSize to %d", loop_match_min_chain_size_);
     static_cast<karto::Parameter<int> *>(mapper_->GetParameterManager()->Get("LoopMatchMinimumChainSize"))->SetValue(loop_match_min_chain_size_);
   }
   if(private_nh_.getParam("loop_match_max_variance_coarse", loop_match_max_variance_coarse_))
   {
-    ROS_INFO("Setting karto parameter LoopMatchMaximumVarianceCoarse to %f", loop_match_max_variance_coarse_);
+    ROS_DEBUG_NAMED("slam_karto", "Setting karto parameter LoopMatchMaximumVarianceCoarse to %f", loop_match_max_variance_coarse_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("LoopMatchMaximumVarianceCoarse"))->SetValue(loop_match_max_variance_coarse_);
   }
   if(private_nh_.getParam("loop_match_min_response_coarse", loop_match_min_response_coarse_))
   {
-    ROS_INFO("Setting karto parameter LoopMatchMinimumResponseCoarse to %f", loop_match_min_response_coarse_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter LoopMatchMinimumResponseCoarse to %f", loop_match_min_response_coarse_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("LoopMatchMinimumResponseCoarse"))->SetValue(loop_match_min_response_coarse_);
   }
   if(private_nh_.getParam("loop_match_min_response_fine", loop_match_min_response_fine_))
   {
-    ROS_INFO("Setting karto parameter LoopMatchMinimumResponseFine to %f", loop_match_min_response_fine_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter LoopMatchMinimumResponseFine to %f", loop_match_min_response_fine_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("LoopMatchMinimumResponseFine"))->SetValue(loop_match_min_response_fine_);
   }
   if(private_nh_.getParam("corr_search_space_dim", corr_search_space_dim_))
   {
-    ROS_INFO("Setting karto parameter CorrelationSearchSpaceDimension to %f", corr_search_space_dim_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter CorrelationSearchSpaceDimension to %f", corr_search_space_dim_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("CorrelationSearchSpaceDimension"))->SetValue(corr_search_space_dim_);
   }
   if(private_nh_.getParam("corr_search_space_res", corr_search_space_res_))
   {
-    ROS_INFO("Setting karto parameter CorrelationSearchSpaceResolution to %f", corr_search_space_res_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter CorrelationSearchSpaceResolution to %f", corr_search_space_res_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("CorrelationSearchSpaceResolution"))->SetValue(corr_search_space_res_);
   }
   if(private_nh_.getParam("corr_search_space_smear_dev", corr_search_space_smear_dev_))
   {
-    ROS_INFO("Setting karto parameter CorrelationSearchSpaceSmearDeviation to %f", corr_search_space_smear_dev_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter CorrelationSearchSpaceSmearDeviation to %f", corr_search_space_smear_dev_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("CorrelationSearchSpaceSmearDeviation"))->SetValue(corr_search_space_smear_dev_);
   }
   if(private_nh_.getParam("loop_search_space_dim", loop_search_space_dim_))
   {
-    ROS_INFO("Setting karto parameter LoopSearchSpaceDimension to %f", loop_search_space_dim_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter LoopSearchSpaceDimension to %f", loop_search_space_dim_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("LoopSearchSpaceDimension"))->SetValue(loop_search_space_dim_);
   }
   if(private_nh_.getParam("loop_search_space_res", loop_search_space_res_))
   {
-    ROS_INFO("Setting karto parameter LoopSearchSpaceResolution to %f", loop_search_space_res_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter LoopSearchSpaceResolution to %f", loop_search_space_res_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("LoopSearchSpaceResolution"))->SetValue(loop_search_space_res_);
   }
   if(private_nh_.getParam("loop_search_space_smear_dev", loop_search_space_smear_dev_))
   {
-    ROS_INFO("Setting karto parameter LoopSearchSpaceSmearDeviation to %f", loop_search_space_smear_dev_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter LoopSearchSpaceSmearDeviation to %f", loop_search_space_smear_dev_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("LoopSearchSpaceSmearDeviation"))->SetValue(loop_search_space_smear_dev_);
   }
   if(private_nh_.getParam("distance_variance_penalty", dist_var_penalty_))
   {
-    ROS_INFO("Setting karto parameter DistanceVariancePenalty to %f", dist_var_penalty_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter DistanceVariancePenalty to %f", dist_var_penalty_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("DistanceVariancePenalty"))->SetValue(dist_var_penalty_);
   }
   if(private_nh_.getParam("angle_variance_penalty", angle_var_penalty_))
   {
-    ROS_INFO("Setting karto parameter AngleVariancePenalty to %f", angle_var_penalty_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter AngleVariancePenalty to %f", angle_var_penalty_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("AngleVariancePenalty"))->SetValue(angle_var_penalty_);
   }
   if(private_nh_.getParam("fine_search_angle_offset", fine_search_angle_offset_))
   {
-    ROS_INFO("Setting karto parameter FineSearchAngleOffset to %f", fine_search_angle_offset_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter FineSearchAngleOffset to %f", fine_search_angle_offset_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("FineSearchAngleOffset"))->SetValue(fine_search_angle_offset_);
   }
   if(private_nh_.getParam("coarse_search_angle_offset", coarse_search_angle_offset_))
   {
-    ROS_INFO("Setting karto parameter CoarseSearchAngleOffset to %f", coarse_search_angle_offset_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter CoarseSearchAngleOffset to %f", coarse_search_angle_offset_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("CoarseSearchAngleOffset"))->SetValue(coarse_search_angle_offset_);
   }
   if(private_nh_.getParam("coarse_angle_resolution", coarse_angle_resolution_))
   {
-    ROS_INFO("Setting karto parameter CoarseAngleResolution to %f", coarse_angle_resolution_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter CoarseAngleResolution to %f", coarse_angle_resolution_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("CoarseAngleResolution"))->SetValue(coarse_angle_resolution_);
   }
   if(private_nh_.getParam("minimum_angle_penalty", minimum_angle_penalty_))
   {
-    ROS_INFO("Setting karto parameter MinimumAnglePenalty to %f", minimum_angle_penalty_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter MinimumAnglePenalty to %f", minimum_angle_penalty_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("MinimumAnglePenalty"))->SetValue(minimum_angle_penalty_);
   }
   if(private_nh_.getParam("minimum_dist_penalty", minimum_dist_penalty_))
   {
-    ROS_INFO("Setting karto parameter MinimumDistancePenalty to %f", minimum_dist_penalty_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter MinimumDistancePenalty to %f", minimum_dist_penalty_);
     static_cast<karto::Parameter<double> *>(mapper_->GetParameterManager()->Get("MinimumDistancePenalty"))->SetValue(minimum_dist_penalty_);
   }
   if(private_nh_.getParam("use_response_expansion", use_response_expansion_))
   {
-    ROS_INFO("Setting karto parameter UseResponseExpansion to %d", use_response_expansion_);
+    ROS_DEBUG_NAMED("slam_karto","Setting karto parameter UseResponseExpansion to %d", use_response_expansion_);
     static_cast<karto::Parameter<bool> *>(mapper_->GetParameterManager()->Get("UseResponseExpansion"))->SetValue(use_response_expansion_);
   }
 
@@ -516,6 +522,7 @@ SlamKarto::publishTransform()
 karto::LaserRangeFinder*
 SlamKarto::getLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
 {
+
   // Check whether we know about this laser yet
   if(lasers_.find(scan->header.frame_id) == lasers_.end())
   {
@@ -539,8 +546,8 @@ SlamKarto::getLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
     }
 
     double yaw = tf::getYaw(laser_pose.getRotation());
-
-    ROS_INFO("laser %s's pose wrt base: %.3f %.3f %.3f",
+   
+    ROS_DEBUG_NAMED("slam_karto","laser %s's pose wrt base: %.3f %.3f %.3f",
 	     scan->header.frame_id.c_str(),
 	     laser_pose.getOrigin().x(),
 	     laser_pose.getOrigin().y(),
@@ -570,7 +577,7 @@ SlamKarto::getLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
     double angle_max = tf::getYaw(max_q);
     bool inverse =  lasers_inverted_[scan->header.frame_id] = angle_max < angle_min;
     if (inverse)
-      ROS_INFO("laser is mounted upside-down");
+      ROS_DEBUG_NAMED("slam_karto","laser is mounted upside-down");
 
 
     // Create a laser range finder device and copy in data from the first
@@ -586,6 +593,7 @@ SlamKarto::getLaser(const sensor_msgs::LaserScan::ConstPtr& scan)
     laser->SetMinimumAngle(scan->angle_min);
     laser->SetMaximumAngle(scan->angle_max);
     laser->SetAngularResolution(scan->angle_increment);
+
     // TODO: expose this, and many other parameters
     //laser_->SetRangeThreshold(12.0);
 
@@ -617,10 +625,32 @@ SlamKarto::getOdomPose(karto::Pose2& karto_pose, const ros::Time& t)
   }
   double yaw = tf::getYaw(odom_pose.getRotation());
 
+  if(!got_initial_pose_)
+  {
+    got_initial_pose_ = true;
+    initial_pose_ = karto::Pose2(odom_pose.getOrigin().x(),
+                       odom_pose.getOrigin().y(),
+                       yaw);
+    initial_odom_ = odom_pose;
+
+  }
+
   karto_pose = 
           karto::Pose2(odom_pose.getOrigin().x(),
                        odom_pose.getOrigin().y(),
-                       yaw);
+                       yaw) - initial_pose_;
+
+  double x = karto_pose.GetX();
+  double y = karto_pose.GetY();
+  double th = initial_pose_.GetHeading();
+
+  double x_dash = x*cos(th) + y*sin(th);
+  double y_dash = -x*sin(th)+y*cos(th);
+
+  karto_pose.SetX(x_dash);
+  karto_pose.SetY(y_dash);
+  karto_pose.SetHeading(yaw-th);
+
   return true;
 }
 
@@ -654,7 +684,7 @@ SlamKarto::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
   karto::Pose2 odom_pose;
   if(addScan(laser, scan, odom_pose))
   {
-    ROS_DEBUG("added scan at pose: %.3f %.3f %.3f", 
+    ROS_DEBUG_NAMED("slam_karto","added scan at pose: %.3f %.3f %.3f", 
               odom_pose.GetX(),
               odom_pose.GetY(),
               odom_pose.GetHeading());
@@ -710,7 +740,7 @@ SlamKarto::updateMap()
     map_.map.info.height = height;
     map_.map.data.resize(map_.map.info.width * map_.map.info.height);
   }
-
+ 
   for (kt_int32s y=0; y<height; y++)
   {
     for (kt_int32s x=0; x<width; x++) 
@@ -735,7 +765,7 @@ SlamKarto::updateMap()
       }
     }
   }
-  
+
   // Set the header information on the map
   map_.map.header.stamp = ros::Time::now();
   map_.map.header.frame_id = map_frame_;
@@ -802,9 +832,7 @@ SlamKarto::addScan(karto::LaserRangeFinder* laser,
     tf::Stamped<tf::Pose> odom_to_map;
     try
     {
-      tf_.transformPose(odom_frame_,tf::Stamped<tf::Pose> (tf::Transform(tf::createQuaternionFromRPY(0, 0, corrected_pose.GetHeading()),
-                                                                    tf::Vector3(corrected_pose.GetX(), corrected_pose.GetY(), 0.0)).inverse(),
-                                                                    scan->header.stamp, base_frame_),odom_to_map);
+      tf_.transformPose(odom_frame_,tf::Stamped<tf::Pose> (tf::Transform(tf::createQuaternionFromRPY(0, 0, corrected_pose.GetHeading()), tf::Vector3(corrected_pose.GetX(), corrected_pose.GetY(), 0.0)).inverse(), scan->header.stamp, base_frame_),odom_to_map);
     }
     catch(tf::TransformException e)
     {
@@ -816,7 +844,6 @@ SlamKarto::addScan(karto::LaserRangeFinder* laser,
     map_to_odom_ = tf::Transform(tf::Quaternion( odom_to_map.getRotation() ),
                                  tf::Point(      odom_to_map.getOrigin() ) ).inverse();
     map_to_odom_mutex_.unlock();
-
 
     // Add the localized range scan to the dataset (for memory management)
     dataset_->Add(range_scan);
