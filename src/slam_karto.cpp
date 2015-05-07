@@ -73,9 +73,7 @@ class SlamKarto
                  karto::Pose2& karto_pose);
     bool updateMap();
     void publishTransform();
-    void publishResponse();
     void publishLoop(double transform_publish_period);
-    void responseLoop(double response_publish_period);
     void visLoop(double vis_publish_period);
     void publishGraphVisualization();
 
@@ -434,8 +432,6 @@ SlamKarto::SlamKarto() :
   mapper_->SetScanSolver(solver_.get());
   solver_->setFrameId(map_frame_);
   
-  // Create a thread to periodically publish the loop closure response
-  response_thread_ = new boost::thread(boost::bind(&SlamKarto::responseLoop, this, response_publish_period));
   vis_thread_ = new boost::thread(boost::bind(&SlamKarto::visLoop, this, vis_publish_period));
 }
 
@@ -470,22 +466,6 @@ SlamKarto::~SlamKarto()
   // I'm supposed to do that.
 }
 
-void SlamKarto::responseLoop(double response_publish_period)
-{
-  if(mapper_!=NULL)
-  {
-  if(response_publish_period == 0)
-    return;
-
-  ros::Rate r(1.0 / response_publish_period);
-  while(ros::ok())
-  {
-    publishResponse();
-    r.sleep();
-  }
-  }
-}
-
 void
 SlamKarto::publishLoop(double transform_publish_period)
 {
@@ -497,17 +477,6 @@ SlamKarto::publishLoop(double transform_publish_period)
   {
     publishTransform();
     r.sleep();
-  }
-}
-
-void SlamKarto::publishResponse()
-{
-  if(mapper_ != NULL)
-  {
-    double response = mapper_->GetLoopClosureResponse();
-    std_msgs::Float64 response_msg;
-    response_msg.data = response;
-    response_publisher_.publish(response_msg); 
   }
 }
 
