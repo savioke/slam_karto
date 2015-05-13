@@ -2,6 +2,18 @@
 Changelog for package slam_karto
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Merge pull request `#4 <https://github.com/savioke/slam_karto/issues/4>`_ from liz-murphy/no_loop_response
+  Remove loop closure response publisher (removed from open karto too)
+* Remove loop closure response publisher (removed from open karto too)
+* Merge pull request `#3 <https://github.com/savioke/slam_karto/issues/3>`_ from liz-murphy/cosmetic
+  Cosmetic
+* Tidied up ROS_INFO messages
+* Maps aligned with orientation of first scan
+* Cosmetic changes to map creation so its aligned, think transforms are wrong
+* Contributors: Jonathan Binney, Stephan, liz-murphy
+
 100.7.4 (2014-10-24)
 --------------------
 * Install karto_spa_plugin
