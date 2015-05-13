@@ -2,8 +2,8 @@
 Changelog for package slam_karto
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+100.7.5 (2015-05-12)
+--------------------
 * Merge pull request `#4 <https://github.com/savioke/slam_karto/issues/4>`_ from liz-murphy/no_loop_response
   Remove loop closure response publisher (removed from open karto too)
 * Remove loop closure response publisher (removed from open karto too)
