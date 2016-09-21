@@ -37,7 +37,7 @@
 #include "nav_msgs/GetMap.h"
 
 #include <open_karto/Mapper.h>
-#include "graph_visualizer.h"
+#include <slam_karto/graph_visualizer.h>
 
 #include <boost/thread.hpp>
 

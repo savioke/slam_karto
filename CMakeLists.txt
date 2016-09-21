@@ -17,10 +17,11 @@ find_package(catkin REQUIRED
 )
 find_package(Eigen REQUIRED)
 
-include_directories(${catkin_INCLUDE_DIRS} ${EIGEN_INCLUDE_DIRS})
+include_directories(include ${catkin_INCLUDE_DIRS} ${EIGEN_INCLUDE_DIRS})
 add_definitions(${EIGEN_DEFINITIONS})
 
 catkin_package(
+  INCLUDE_DIRS include
   LIBRARIES karto_scan_solver_plugins karto_graph_visualizer_plugins
   )
 
@@ -30,7 +31,7 @@ add_executable(slam_karto src/slam_karto.cpp)
 
 target_link_libraries(karto_scan_solver_plugins ${catkin_LIBRARIES})
 target_link_libraries(karto_graph_visualizer_plugins ${catkin_LIBRARIES})
-target_link_libraries(slam_karto ${catkin_LIBRARIES} karto_scan_solver_plugins karto_graph_visualizer_plugins)
+target_link_libraries(slam_karto ${catkin_LIBRARIES})
 
 install(TARGETS slam_karto karto_scan_solver_plugins karto_graph_visualizer_plugins
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

@@ -1,4 +1,4 @@
-#include "spa_graph_visualizer.h"
+#include <slam_karto/spa_graph_visualizer.h>
 #include "ros/console.h"
 #include <pluginlib/class_list_macros.h>
 
@@ -10,7 +10,7 @@ SPAGraphVisualizer::SPAGraphVisualizer():marker_count_(0),visualizer_initialized
 
 void SPAGraphVisualizer::initialize(const boost::shared_ptr<karto::ScanSolver>& solver)
 {
-  solver_ = boost::dynamic_pointer_cast < karto_plugins::SPASolver > (solver);
+  solver_ = boost::dynamic_pointer_cast<karto_plugins::SPASolver>(solver);
   if (solver_ == NULL) {
     ROS_ERROR("Could not initialize SPAGraphVisualizer. Check specified solver, this visualizer is only compatible with the SPA solver.");
     return;
@@ -70,7 +70,7 @@ visualization_msgs::MarkerArray SPAGraphVisualizer::createVisualizationMarkers()
     marray.markers.push_back(visualization_msgs::Marker(m));
     id++;
 
-    if(i>0)
+    if (i > 0)
     {
       edge.points.clear();
 
