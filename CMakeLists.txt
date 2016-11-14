@@ -14,15 +14,26 @@ find_package(catkin REQUIRED
     tf
     visualization_msgs
     pluginlib
+    std_msgs
 )
 find_package(Eigen REQUIRED)
 
-include_directories(include ${catkin_INCLUDE_DIRS} ${EIGEN_INCLUDE_DIRS})
+add_service_files(DIRECTORY srv FILES RemoveLastNVertices.srv)
+
+generate_messages(
+	DEPENDENCIES std_msgs
+)
+
+include_directories(
+  ${PROJECT_SOURCE_DIR}/include
+  ${catkin_INCLUDE_DIRS}
+  ${EIGEN_INCLUDE_DIRS})
 add_definitions(${EIGEN_DEFINITIONS})
 
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES karto_scan_solver_plugins karto_graph_visualizer_plugins
+  CATKIN_DEPENDS std_msgs
   )
 
 add_library(karto_scan_solver_plugins src/spa_solver.cpp)
@@ -46,3 +57,13 @@ install(DIRECTORY include/${PROJECT_NAME}/
 install(FILES karto_scan_solver_plugins.xml karto_graph_visualizer_plugins.xml
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
+
+#############
+## Testing ##
+#############
+if (CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(slam_graph_operations_test test/slam_graph_operations_test.cpp)
+  target_link_libraries(slam_graph_operations_test gtest_main)
+  set_target_properties(slam_graph_operations_test PROPERTIES COMPILE_FLAGS "-std=c++11")
+
+endif()

@@ -48,6 +48,7 @@
 #include <vector>
 
 #include <pluginlib/class_loader.h>
+#include <slam_karto/RemoveLastNVertices.h>
 
 // compute linear index for given map coords
 #define MAP_IDX(sx, i, j) ((sx) * (j) + (i))
@@ -61,6 +62,7 @@ class SlamKarto
     void laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan);
     bool mapCallback(nav_msgs::GetMap::Request  &req,
                      nav_msgs::GetMap::Response &res);
+    bool removeLastNVerticesCallback(slam_karto::RemoveLastNVertices::Request& req, slam_karto::RemoveLastNVertices::Response& res);
 
   private:
     bool getOdomPose(karto::Pose2& karto_pose, const ros::Time& t);
@@ -83,7 +85,7 @@ class SlamKarto
     ros::Publisher sst_;
     ros::Publisher marker_publisher_;
     ros::Publisher sstm_;
-    ros::ServiceServer ss_;
+    ros::ServiceServer ss_, remove_vertices_ss_;
 
     // The map that will be published / send to service callers
     nav_msgs::GetMap::Response map_;
@@ -167,6 +169,7 @@ SlamKarto::SlamKarto() :
   sst_ = node_.advertise<nav_msgs::OccupancyGrid>("map", 1, true);
   sstm_ = node_.advertise<nav_msgs::MapMetaData>("map_metadata", 1, true);
   ss_ = node_.advertiseService("dynamic_map", &SlamKarto::mapCallback, this);
+  remove_vertices_ss_ = node_.advertiseService("remove_last_n_vertices", &SlamKarto::removeLastNVerticesCallback, this);
   scan_filter_sub_ = new message_filters::Subscriber<sensor_msgs::LaserScan>(node_, "scan", 5);
   scan_filter_ = new tf::MessageFilter<sensor_msgs::LaserScan>(*scan_filter_sub_, tf_, odom_frame_, 5);
   scan_filter_->registerCallback(boost::bind(&SlamKarto::laserCallback, this, _1));
@@ -685,6 +688,14 @@ SlamKarto::addScan(karto::LaserRangeFinder* laser,
 
   return processed;
 }
+
+bool
+SlamKarto::removeLastNVerticesCallback(slam_karto::RemoveLastNVertices::Request& req, slam_karto::RemoveLastNVertices::Response& res)
+{
+  mapper_->MyRemoveLastNVertices(req.nb_of_vertices_to_remove.data);
+  return true;
+}
+
 
 bool 
 SlamKarto::mapCallback(nav_msgs::GetMap::Request  &req,
