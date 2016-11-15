@@ -2,8 +2,8 @@
 Changelog for package slam_karto
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.7.4 (2016-11-15)
+------------------
 * Merge pull request `#13 <https://github.com/ros-perception/slam_karto/issues/13>`_ from alain-m/add-solver-plugin-interface
   Add pluginlib interfaces for using different solvers and graph visualizations
 * Moved header files to include folder
