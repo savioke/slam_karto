@@ -43,6 +43,7 @@ add_executable(slam_karto src/slam_karto.cpp)
 target_link_libraries(karto_scan_solver_plugins ${catkin_LIBRARIES})
 target_link_libraries(karto_graph_visualizer_plugins ${catkin_LIBRARIES})
 target_link_libraries(slam_karto ${catkin_LIBRARIES} karto_scan_solver_plugins karto_graph_visualizer_plugins)
+add_dependencies(slam_karto slam_karto_generate_messages_cpp)
 
 install(TARGETS slam_karto karto_scan_solver_plugins karto_graph_visualizer_plugins
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

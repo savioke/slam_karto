@@ -31,6 +31,7 @@
 #include "tf/transform_listener.h"
 #include "tf/message_filter.h"
 #include "visualization_msgs/MarkerArray.h"
+#include <std_srvs/Empty.h>
 
 #include "nav_msgs/MapMetaData.h"
 #include "sensor_msgs/LaserScan.h"
@@ -50,6 +51,9 @@
 #include <pluginlib/class_loader.h>
 #include <slam_karto/RemoveLastNVertices.h>
 
+// Dataset serialization
+#include <fstream>
+
 // compute linear index for given map coords
 #define MAP_IDX(sx, i, j) ((sx) * (j) + (i))
 
@@ -63,6 +67,8 @@ class SlamKarto
     bool mapCallback(nav_msgs::GetMap::Request  &req,
                      nav_msgs::GetMap::Response &res);
     bool removeLastNVerticesCallback(slam_karto::RemoveLastNVertices::Request& req, slam_karto::RemoveLastNVertices::Response& res);
+    bool rebuildGraphCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
+    bool saveDatasetCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
 
   private:
     bool getOdomPose(karto::Pose2& karto_pose, const ros::Time& t);
@@ -85,7 +91,7 @@ class SlamKarto
     ros::Publisher sst_;
     ros::Publisher marker_publisher_;
     ros::Publisher sstm_;
-    ros::ServiceServer ss_, remove_vertices_ss_;
+    ros::ServiceServer ss_, remove_vertices_ss_, rebuild_graph_ss_, save_dataset_ss_;
 
     // The map that will be published / send to service callers
     nav_msgs::GetMap::Response map_;
@@ -121,6 +127,25 @@ class SlamKarto
     tf::Transform map_to_odom_;
     bool inverted_laser_;
 };
+
+
+BOOST_CLASS_EXPORT(karto::DatasetInfo)
+BOOST_CLASS_EXPORT(karto::Parameter<karto::Pose2>)
+BOOST_CLASS_EXPORT(karto::Parameter<kt_double>)
+BOOST_CLASS_EXPORT(karto::Parameter<std::string>)
+BOOST_CLASS_EXPORT(karto::AbstractParameter)
+BOOST_CLASS_EXPORT(karto::ParameterManager)
+BOOST_CLASS_EXPORT(karto::Name)
+BOOST_CLASS_EXPORT(karto::Object)
+BOOST_CLASS_EXPORT(karto::Vector2<kt_double>)
+BOOST_CLASS_EXPORT(karto::Pose2)
+BOOST_CLASS_EXPORT(karto::Sensor)
+BOOST_CLASS_EXPORT(karto::Dataset)
+
+BOOST_CLASS_EXPORT(karto::Vector2<kt_int32s>)
+BOOST_CLASS_EXPORT(karto::Parameter<kt_int32u>)
+BOOST_CLASS_EXPORT(karto::Parameter<kt_int32s>)
+BOOST_CLASS_EXPORT(karto::Parameter<kt_bool>)
 
 SlamKarto::SlamKarto() :
         got_map_(false),
@@ -170,6 +195,8 @@ SlamKarto::SlamKarto() :
   sstm_ = node_.advertise<nav_msgs::MapMetaData>("map_metadata", 1, true);
   ss_ = node_.advertiseService("dynamic_map", &SlamKarto::mapCallback, this);
   remove_vertices_ss_ = node_.advertiseService("remove_last_n_vertices", &SlamKarto::removeLastNVerticesCallback, this);
+  rebuild_graph_ss_ = node_.advertiseService("rebuild_graph", &SlamKarto::rebuildGraphCallback, this);
+  save_dataset_ss_ = node_.advertiseService("save_dataset", &SlamKarto::saveDatasetCallback, this);
   scan_filter_sub_ = new message_filters::Subscriber<sensor_msgs::LaserScan>(node_, "scan", 5);
   scan_filter_ = new tf::MessageFilter<sensor_msgs::LaserScan>(*scan_filter_sub_, tf_, odom_frame_, 5);
   scan_filter_->registerCallback(boost::bind(&SlamKarto::laserCallback, this, _1));
@@ -687,6 +714,40 @@ SlamKarto::addScan(karto::LaserRangeFinder* laser,
     delete range_scan;
 
   return processed;
+}
+
+bool
+SlamKarto::saveDatasetCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res){
+
+    // create and open a character archive for output
+    std::ofstream ofs("/home/alain/myamazingdataset");
+    // save dataset to archive
+    {
+        boost::archive::text_oarchive oa(ofs);
+        // write class instance to archive
+        oa << *dataset_;
+    	// archive and stream closed when destructors are called
+    }
+
+	return true;
+}
+
+bool
+SlamKarto::rebuildGraphCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res){
+
+  mapper_->Reset();
+  ROS_INFO_STREAM("Dataset size: " << dataset_->GetObjects().size());
+  for(int i = 0; i < dataset_->GetObjects().size();i++){
+    if (dynamic_cast<karto::LocalizedRangeScan*>(dataset_->GetObjects()[i])){
+      karto::LocalizedRangeScan* pScan = dynamic_cast<karto::LocalizedRangeScan*>(dataset_->GetObjects()[i]);
+      pScan->SetCorrectedPose(pScan->GetOdometricPose()); // Reset corrections
+      if(!mapper_->Process(pScan)){
+        ROS_ERROR("Failed to re-add scan to mapper!");
+      }
+    }
+  }
+
+  return true;
 }
 
 bool
