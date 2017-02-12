@@ -49,7 +49,6 @@
 #include <vector>
 
 #include <pluginlib/class_loader.h>
-#include <slam_karto/RemoveLastNVertices.h>
 
 // Dataset serialization
 #include <fstream>
@@ -66,7 +65,6 @@ class SlamKarto
     void laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan);
     bool mapCallback(nav_msgs::GetMap::Request  &req,
                      nav_msgs::GetMap::Response &res);
-    bool removeLastNVerticesCallback(slam_karto::RemoveLastNVertices::Request& req, slam_karto::RemoveLastNVertices::Response& res);
     bool rebuildGraphCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
     bool saveDatasetCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
 
@@ -128,24 +126,31 @@ class SlamKarto
     bool inverted_laser_;
 };
 
+// cat open_karto/include/open_karto/Karto.h | grep '^ \+class.*' | cut -d: -f1 | cut -d';' -f1 | sed 's/KARTO_EXPORT //g' | sed 's/^ \+class //g' | sed 's/^/BOOST_CLASS_EXPORT(karto::/g' | sed 's/ *$/)/g' | sort | uniq
 
+BOOST_CLASS_EXPORT(karto::AbstractParameter)
+BOOST_CLASS_EXPORT(karto::BoundingBox2)
+BOOST_CLASS_EXPORT(karto::CustomData)
+BOOST_CLASS_EXPORT(karto::Dataset)
 BOOST_CLASS_EXPORT(karto::DatasetInfo)
+BOOST_CLASS_EXPORT(karto::LaserRangeFinder)
+BOOST_CLASS_EXPORT(karto::LaserRangeScan)
+BOOST_CLASS_EXPORT(karto::LocalizedRangeScan)
+BOOST_CLASS_EXPORT(karto::Name)
+BOOST_CLASS_EXPORT(karto::Object)
 BOOST_CLASS_EXPORT(karto::Parameter<karto::Pose2>)
 BOOST_CLASS_EXPORT(karto::Parameter<kt_double>)
 BOOST_CLASS_EXPORT(karto::Parameter<std::string>)
-BOOST_CLASS_EXPORT(karto::AbstractParameter)
-BOOST_CLASS_EXPORT(karto::ParameterManager)
-BOOST_CLASS_EXPORT(karto::Name)
-BOOST_CLASS_EXPORT(karto::Object)
-BOOST_CLASS_EXPORT(karto::Vector2<kt_double>)
-BOOST_CLASS_EXPORT(karto::Pose2)
-BOOST_CLASS_EXPORT(karto::Sensor)
-BOOST_CLASS_EXPORT(karto::Dataset)
-
-BOOST_CLASS_EXPORT(karto::Vector2<kt_int32s>)
 BOOST_CLASS_EXPORT(karto::Parameter<kt_int32u>)
 BOOST_CLASS_EXPORT(karto::Parameter<kt_int32s>)
 BOOST_CLASS_EXPORT(karto::Parameter<kt_bool>)
+BOOST_CLASS_EXPORT(karto::ParameterEnum)
+BOOST_CLASS_EXPORT(karto::ParameterManager)
+BOOST_CLASS_EXPORT(karto::Pose2)
+BOOST_CLASS_EXPORT(karto::Sensor)
+BOOST_CLASS_EXPORT(karto::SensorData)
+BOOST_CLASS_EXPORT(karto::Vector2<kt_double>)
+BOOST_CLASS_EXPORT(karto::Vector2<kt_int32s>)
 
 SlamKarto::SlamKarto() :
         got_map_(false),
@@ -194,7 +199,6 @@ SlamKarto::SlamKarto() :
   sst_ = node_.advertise<nav_msgs::OccupancyGrid>("map", 1, true);
   sstm_ = node_.advertise<nav_msgs::MapMetaData>("map_metadata", 1, true);
   ss_ = node_.advertiseService("dynamic_map", &SlamKarto::mapCallback, this);
-  remove_vertices_ss_ = node_.advertiseService("remove_last_n_vertices", &SlamKarto::removeLastNVerticesCallback, this);
   rebuild_graph_ss_ = node_.advertiseService("rebuild_graph", &SlamKarto::rebuildGraphCallback, this);
   save_dataset_ss_ = node_.advertiseService("save_dataset", &SlamKarto::saveDatasetCallback, this);
   scan_filter_sub_ = new message_filters::Subscriber<sensor_msgs::LaserScan>(node_, "scan", 5);
@@ -749,14 +753,6 @@ SlamKarto::rebuildGraphCallback(std_srvs::Empty::Request& req, std_srvs::Empty::
 
   return true;
 }
-
-bool
-SlamKarto::removeLastNVerticesCallback(slam_karto::RemoveLastNVertices::Request& req, slam_karto::RemoveLastNVertices::Response& res)
-{
-  mapper_->MyRemoveLastNVertices(req.nb_of_vertices_to_remove.data);
-  return true;
-}
-
 
 bool 
 SlamKarto::mapCallback(nav_msgs::GetMap::Request  &req,
