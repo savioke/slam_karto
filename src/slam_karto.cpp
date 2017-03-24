@@ -142,8 +142,12 @@ class SlamKarto
     std::string output_dataset_file_;
 
     bool dont_add_new_nodes_before_graph_is_restored_;
+    int new_scans_received_;
     double minimum_travel_distance_;
     double minimum_travel_heading_;
+
+    kt_double laser_range_threshold_;
+    bool graph_is_restored_;
 };
 
 // You can retrieve the list below with : 
@@ -194,7 +198,9 @@ SlamKarto::SlamKarto() :
         dataset_(NULL),
 	old_map_to_base_link_set_(false),
 	old_map_to_old_odom_set_(false),
-	dont_add_new_nodes_before_graph_is_restored_(false)
+	dont_add_new_nodes_before_graph_is_restored_(false),
+  new_scans_received_(0),
+  graph_is_restored_(false)
 {
   map_to_odom_.setIdentity();
   // Retrieve parameters
@@ -608,6 +614,31 @@ SlamKarto::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
     return;
   }
 
+  if(graph_is_restored_){
+    if(new_scans_received_ == 0){
+      ROS_INFO_STREAM("First new scan received! Setting special scan matching parameters for first scan... ");
+      mapper_->setParamForceNoDistPenalty(true);
+      mapper_->setParamCoarseSearchAngleOffset(1.0);
+  //      mapper_->setParamFineSearchAngleOffset(1.0);
+      mapper_->setParamCorrelationSearchSpaceDimension(1.0);
+      mapper_->setParamMinimumTravelDistance(0.0);
+      mapper_->setParamMinimumTravelHeading(0.0);
+      mapper_->ResetScanMatcher(laser_range_threshold_);
+    }else if(new_scans_received_ == 1){
+      ROS_INFO_STREAM("Second new scan received. Resetting normal scan matching parameters.");
+      //TODO
+      mapper_->setParamForceNoDistPenalty(false);
+      mapper_->setParamCoarseSearchAngleOffset(0.35);  // TODO
+  //      mapper_->setParamFineSearchAngleOffset(0.0035);  // TODO
+      mapper_->setParamCorrelationSearchSpaceDimension(0.3);  // TODO
+      mapper_->setParamMinimumTravelDistance(minimum_travel_distance_);
+      mapper_->setParamMinimumTravelHeading(minimum_travel_heading_);
+      mapper_->ResetScanMatcher(laser_range_threshold_);
+    }
+    new_scans_received_++;
+  }
+
+
   laser_count_++;
   if ((laser_count_ % throttle_scans_) != 0)
     return;
@@ -627,7 +658,7 @@ SlamKarto::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
   karto::Pose2 odom_pose;
   if(addScan(laser, scan, odom_pose))
   {
-    ROS_DEBUG("added scan at pose: %.3f %.3f %.3f", 
+    ROS_INFO("added scan at pose: %.3f %.3f %.3f", 
               odom_pose.GetX(),
               odom_pose.GetY(),
               odom_pose.GetHeading());
@@ -639,7 +670,7 @@ SlamKarto::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
       {
         last_map_update = scan->header.stamp;
         got_map_ = true;
-        ROS_DEBUG("Updated the map");
+        ROS_INFO("Updated the map");
       }
     }
   }
@@ -726,8 +757,10 @@ SlamKarto::addScan(karto::LaserRangeFinder* laser,
 		   const sensor_msgs::LaserScan::ConstPtr& scan, 
                    karto::Pose2& karto_pose)
 {
-  if(!getOdomPose(karto_pose, scan->header.stamp))
+  if(!getOdomPose(karto_pose, scan->header.stamp)){
+    ROS_INFO_STREAM("Couldn't retrieve odom pose, cannot add this scan");
      return false;
+  }
   
   // Create a vector of doubles for karto
   std::vector<kt_double> readings;
@@ -761,6 +794,7 @@ SlamKarto::addScan(karto::LaserRangeFinder* laser,
     karto::Pose2 corrected_pose = range_scan->GetCorrectedPose();
 
     // Compute the map->odom transform
+    ROS_INFO_STREAM("Scan has been processed. We will now recompute the map->odom transform");
     tf::Stamped<tf::Pose> odom_to_map;
     try
     {
@@ -856,19 +890,23 @@ bool SlamKarto::offsetOdometricPosesForNewMapFrame(){
       tf::Transform tf_new_odometric_pose = kartoPose2ToTfTransform(new_odometric_pose);
       tf::Transform tf_old_map_to_base_link = kartoPose2ToTfTransform(old_map_to_base_link_);
       tf::Transform tf_old_map_to_old_odom = kartoPose2ToTfTransform(old_map_to_old_odom_);
-
+/*
       // Step 1)
-      tf_new_odometric_pose = tf_new_odometric_pose * current_base_wrt_odom;
+      //tf_new_odometric_pose = tf_new_odometric_pose * current_base_wrt_odom;
+      tf_new_odometric_pose = current_base_wrt_odom.inverse() * tf_new_odometric_pose;
       new_odometric_pose = tfTransformToKartoPose2(tf_new_odometric_pose);
       ROS_INFO_STREAM("Odometric pose after composing with current_base_wrt_odom: " << new_odometric_pose);
-
+*/
       // Step 2)
       tf_new_odometric_pose= tf_old_map_to_base_link.inverse() * tf_new_odometric_pose;
+//      tf_new_odometric_pose= tf_new_odometric_pose * tf_old_map_to_base_link.inverse(); // NO
       new_odometric_pose = tfTransformToKartoPose2(tf_new_odometric_pose);
       ROS_INFO_STREAM("Odometric pose after composing with INV of old_map_to_base_link: " << new_odometric_pose);
 
       // Step 3)
-      tf_new_odometric_pose =  tf_new_odometric_pose * tf_old_map_to_old_odom;
+//      tf_new_odometric_pose =  tf_new_odometric_pose * tf_old_map_to_old_odom; // Tested
+      tf_new_odometric_pose =  tf_old_map_to_old_odom.inverse() * tf_new_odometric_pose;
+//      tf_new_odometric_pose =  tf_old_map_to_old_odom * tf_new_odometric_pose; 
       new_odometric_pose = tfTransformToKartoPose2(tf_new_odometric_pose);
       ROS_INFO_STREAM("Odometric pose after composing with old_map_to_old_odom: " << new_odometric_pose);
 
@@ -951,6 +989,7 @@ SlamKarto::rebuildGraphCallback(std_srvs::Empty::Request& req, std_srvs::Empty::
       if(dynamic_cast<karto::LaserRangeFinder*>(dataset_->GetObjects()[i])){
         karto::LaserRangeFinder* pLaser = dynamic_cast<karto::LaserRangeFinder*>(dataset_->GetObjects()[i]);
         lasers_.insert(std::map<std::string, karto::LaserRangeFinder*>::value_type(pLaser->GetName().GetName(), pLaser));
+        laser_range_threshold_ = pLaser->GetRangeThreshold();
         sensor_count+=1;
       }
     }
@@ -971,6 +1010,39 @@ SlamKarto::rebuildGraphCallback(std_srvs::Empty::Request& req, std_srvs::Empty::
 //        pScan->SetCorrectedPose(pScan->GetOdometricPose()); // Reset corrections
         if(!mapper_->Process(pScan)){
           ROS_ERROR("Failed to re-add scan to mapper!");
+        }else{
+          // Update visualizations a first time
+          updateMap();
+          publishGraphVisualization();
+/*
+          karto::Pose2 corrected_pose = pScan->GetCorrectedPose();
+
+          // Compute the map->odom transform
+          tf::Stamped<tf::Pose> odom_to_map;
+          try
+          {
+            ros::Time now = ros::Time::now();
+            tf_.waitForTransform(odom_frame_, base_frame_,
+                                      now, ros::Duration(1.0));
+            tf_.transformPose(odom_frame_,tf::Stamped<tf::Pose> (tf::Transform(tf::createQuaternionFromRPY(0, 0, corrected_pose.GetHeading()),
+                                                                          tf::Vector3(corrected_pose.GetX(), corrected_pose.GetY(), 0.0)).inverse(),
+                                                                          now, base_frame_),odom_to_map);
+          }
+          catch(tf::TransformException e)
+          {
+            ROS_ERROR("Transform from base_link to odom failed\n");
+            odom_to_map.setIdentity();
+          }
+
+          map_to_odom_mutex_.lock();
+          map_to_odom_ = tf::Transform(tf::Quaternion( odom_to_map.getRotation() ),
+                                       tf::Point(      odom_to_map.getOrigin() ) ).inverse();
+          map_to_odom_mutex_.unlock();
+
+          // Update visualizations a second time
+          updateMap();
+          publishGraphVisualization();
+          */
         }
       }
     }
@@ -990,6 +1062,11 @@ SlamKarto::rebuildGraphCallback(std_srvs::Empty::Request& req, std_srvs::Empty::
     got_map_ = true;
     ROS_DEBUG("Updated the map");
   }
+
+  ROS_INFO_STREAM("Adding artificial delay ...");
+  ros::Duration(1.0).sleep();
+
+  graph_is_restored_ = true;
   return true;
 }
 
