@@ -97,7 +97,6 @@ class SlamKarto
     ros::Publisher marker_publisher_;
     ros::Publisher sstm_;
     ros::Subscriber set_old_map_to_base_link_sub_;
-    ros::Subscriber set_old_map_to_old_odom_sub_;
     ros::ServiceServer ss_, remove_vertices_ss_, rebuild_graph_ss_, save_dataset_ss_;
 
     // The map that will be published / send to service callers
@@ -134,9 +133,7 @@ class SlamKarto
     tf::Transform map_to_odom_;
     bool inverted_laser_;
     karto::Pose2 old_map_to_base_link_;
-    karto::Pose2 old_map_to_old_odom_;
     bool old_map_to_base_link_set_;
-    bool old_map_to_old_odom_set_;
 
     std::string input_dataset_file_;
     std::string output_dataset_file_;
@@ -197,7 +194,6 @@ SlamKarto::SlamKarto() :
         mapper_(NULL),
         dataset_(NULL),
 	old_map_to_base_link_set_(false),
-	old_map_to_old_odom_set_(false),
 	dont_add_new_nodes_before_graph_is_restored_(false),
   new_scans_received_(0),
   graph_is_restored_(false)
@@ -247,7 +243,6 @@ SlamKarto::SlamKarto() :
   rebuild_graph_ss_ = node_.advertiseService("rebuild_graph", &SlamKarto::rebuildGraphCallback, this);
   save_dataset_ss_ = node_.advertiseService("save_dataset", &SlamKarto::saveDatasetCallback, this);
   set_old_map_to_base_link_sub_ = node_.subscribe("/set_old_map_to_base_link", 1, &SlamKarto::setOldMapToBaseLinkCallback, this);
-  set_old_map_to_old_odom_sub_ = node_.subscribe("/set_old_map_to_old_odom", 1, &SlamKarto::setOldMapToOldOdomCallback, this);
   scan_filter_sub_ = new message_filters::Subscriber<sensor_msgs::LaserScan>(node_, "scan", 5);
   scan_filter_ = new tf::MessageFilter<sensor_msgs::LaserScan>(*scan_filter_sub_, tf_, odom_frame_, 5);
   scan_filter_->registerCallback(boost::bind(&SlamKarto::laserCallback, this, _1));
@@ -598,16 +593,6 @@ SlamKarto::setOldMapToBaseLinkCallback(const geometry_msgs::Pose::ConstPtr& pose
 }
 
 void
-SlamKarto::setOldMapToOldOdomCallback(const geometry_msgs::Pose::ConstPtr& pose){
-  ROS_INFO_STREAM("Received Old map -> Old odom transform");
-	old_map_to_old_odom_.SetX(pose->position.x);
-	old_map_to_old_odom_.SetY(pose->position.y);
-  	double yaw = tf::getYaw(pose->orientation);
-	old_map_to_old_odom_.SetHeading(yaw);
-	old_map_to_old_odom_set_=true;
-}
-
-void
 SlamKarto::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
 {
   if(dont_add_new_nodes_before_graph_is_restored_ && dataset_->GetObjects().size() == 0){
@@ -836,22 +821,22 @@ karto::Pose2 SlamKarto::tfTransformToKartoPose2(const tf::Transform& transform){
 
 bool
 SlamKarto::saveDatasetCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res){
+  map_to_odom_mutex_.lock();
+  dataset_->SetOdomToMap(tfTransformToKartoPose2(map_to_odom_));
+  map_to_odom_mutex_.unlock();
+
   std::ofstream ofs(output_dataset_file_.c_str());
   {
     boost::archive::text_oarchive oa(ofs);
     oa << dataset_;
   }
-
-  map_to_odom_mutex_.lock();
-  ROS_INFO_STREAM("map_to_odom_.getRotation(): " << map_to_odom_.getRotation() << " map_to_odom_.getOrigin(): " << map_to_odom_.getOrigin());
-  map_to_odom_mutex_.unlock();
   return true;
 }
 
 bool SlamKarto::offsetOdometricPosesForNewMapFrame(){
 
-  if(!old_map_to_base_link_set_ || !old_map_to_old_odom_set_){
-	ROS_ERROR("Some initial transforms have not been specified. Cannot offset odometric poses of nodes for new map frame");
+  if(!old_map_to_base_link_set_ ){
+	ROS_ERROR("The old map -> base link transform has not been specified. Cannot offset odometric poses of nodes for new map frame");
 	return false;
   }
 
@@ -889,24 +874,20 @@ bool SlamKarto::offsetOdometricPosesForNewMapFrame(){
       // We convert the karto::Pose2 into tf::Transform, which are more intuitive to use for composing transformations
       tf::Transform tf_new_odometric_pose = kartoPose2ToTfTransform(new_odometric_pose);
       tf::Transform tf_old_map_to_base_link = kartoPose2ToTfTransform(old_map_to_base_link_);
-      tf::Transform tf_old_map_to_old_odom = kartoPose2ToTfTransform(old_map_to_old_odom_);
+      tf::Transform tf_old_map_to_old_odom = kartoPose2ToTfTransform(dataset_->GetOdomToMap());
 /*
       // Step 1)
-      //tf_new_odometric_pose = tf_new_odometric_pose * current_base_wrt_odom;
       tf_new_odometric_pose = current_base_wrt_odom.inverse() * tf_new_odometric_pose;
       new_odometric_pose = tfTransformToKartoPose2(tf_new_odometric_pose);
       ROS_INFO_STREAM("Odometric pose after composing with current_base_wrt_odom: " << new_odometric_pose);
 */
       // Step 2)
       tf_new_odometric_pose= tf_old_map_to_base_link.inverse() * tf_new_odometric_pose;
-//      tf_new_odometric_pose= tf_new_odometric_pose * tf_old_map_to_base_link.inverse(); // NO
       new_odometric_pose = tfTransformToKartoPose2(tf_new_odometric_pose);
       ROS_INFO_STREAM("Odometric pose after composing with INV of old_map_to_base_link: " << new_odometric_pose);
 
       // Step 3)
-//      tf_new_odometric_pose =  tf_new_odometric_pose * tf_old_map_to_old_odom; // Tested
       tf_new_odometric_pose =  tf_old_map_to_old_odom.inverse() * tf_new_odometric_pose;
-//      tf_new_odometric_pose =  tf_old_map_to_old_odom * tf_new_odometric_pose; 
       new_odometric_pose = tfTransformToKartoPose2(tf_new_odometric_pose);
       ROS_INFO_STREAM("Odometric pose after composing with old_map_to_old_odom: " << new_odometric_pose);
 
@@ -922,8 +903,6 @@ bool SlamKarto::offsetOdometricPosesForNewMapFrame(){
 
       // And set the odometric pose to be the corrected pose
       pScan->SetOdometricPose(new_corrected_pose);
-      
-     // pScan->SetCorrectedPose(new_odometric_pose); // Cancel corrections
     }
   }
 
