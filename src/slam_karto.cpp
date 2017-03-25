@@ -145,6 +145,7 @@ class SlamKarto
 
     kt_double laser_range_threshold_;
     bool graph_is_restored_;
+    bool use_scan_matching_;
 };
 
 // You can retrieve the list below with : 
@@ -327,9 +328,8 @@ SlamKarto::~SlamKarto()
 void SlamKarto::initializeMapper(ros::NodeHandle& private_nh,boost::shared_ptr<karto::ScanSolver> solver,karto::Mapper* mapper){
 
   // Setting General Parameters from the Parameter Server
-  bool use_scan_matching;
-  if(private_nh.getParam("use_scan_matching", use_scan_matching))
-    mapper->setParamUseScanMatching(use_scan_matching);
+  if(private_nh.getParam("use_scan_matching", use_scan_matching_))
+    mapper->setParamUseScanMatching(use_scan_matching_);
   
   bool use_scan_barycenter;
   if(private_nh.getParam("use_scan_barycenter", use_scan_barycenter))
@@ -603,9 +603,9 @@ SlamKarto::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan)
     if(new_scans_received_ == 0){
       ROS_INFO_STREAM("First new scan received! Setting special scan matching parameters for first scan... ");
       mapper_->setParamForceNoDistPenalty(true);
-      mapper_->setParamCoarseSearchAngleOffset(1.0);
+      mapper_->setParamCoarseSearchAngleOffset(3.0);
   //      mapper_->setParamFineSearchAngleOffset(1.0);
-      mapper_->setParamCorrelationSearchSpaceDimension(1.0);
+      mapper_->setParamCorrelationSearchSpaceDimension(3.0);
       mapper_->setParamMinimumTravelDistance(0.0);
       mapper_->setParamMinimumTravelHeading(0.0);
       mapper_->ResetScanMatcher(laser_range_threshold_);
@@ -885,12 +885,12 @@ bool SlamKarto::offsetOdometricPosesForNewMapFrame(){
       tf_new_odometric_pose= tf_old_map_to_base_link.inverse() * tf_new_odometric_pose;
       new_odometric_pose = tfTransformToKartoPose2(tf_new_odometric_pose);
       ROS_INFO_STREAM("Odometric pose after composing with INV of old_map_to_base_link: " << new_odometric_pose);
-
+/*
       // Step 3)
       tf_new_odometric_pose =  tf_old_map_to_old_odom.inverse() * tf_new_odometric_pose;
       new_odometric_pose = tfTransformToKartoPose2(tf_new_odometric_pose);
       ROS_INFO_STREAM("Odometric pose after composing with old_map_to_old_odom: " << new_odometric_pose);
-
+*/
       // Convert back to karto::Pose2
       new_odometric_pose = tfTransformToKartoPose2(tf_new_odometric_pose);
       ROS_INFO_STREAM("Odometric pose after applying offset: " << new_odometric_pose);
@@ -960,6 +960,7 @@ SlamKarto::rebuildGraphCallback(std_srvs::Empty::Request& req, std_srvs::Empty::
   // as we reload the nodes of the graph, we re-enable them after
   mapper_->setParamMinimumTravelDistance(0.0);
   mapper_->setParamMinimumTravelHeading(0.0);
+//  mapper_->setParamUseScanMatching(false);  // We don't need to recorrect these poses (TODO: make it an option)
 
   // Re-populate the list of sensors
   int sensor_count = 0;
@@ -987,7 +988,8 @@ SlamKarto::rebuildGraphCallback(std_srvs::Empty::Request& req, std_srvs::Empty::
       if (dynamic_cast<karto::LocalizedRangeScan*>(dataset_->GetObjects()[i])){
         karto::LocalizedRangeScan* pScan = dynamic_cast<karto::LocalizedRangeScan*>(dataset_->GetObjects()[i]);
 //        pScan->SetCorrectedPose(pScan->GetOdometricPose()); // Reset corrections
-        if(!mapper_->Process(pScan)){
+        kt_bool disable_correction = true;
+        if(!mapper_->Process(pScan, disable_correction)){
           ROS_ERROR("Failed to re-add scan to mapper!");
         }else{
           // Update visualizations a first time
@@ -1034,6 +1036,7 @@ SlamKarto::rebuildGraphCallback(std_srvs::Empty::Request& req, std_srvs::Empty::
   // the minimum travel distance/heading
   mapper_->setParamMinimumTravelDistance(minimum_travel_distance_);
   mapper_->setParamMinimumTravelHeading(minimum_travel_heading_);
+  mapper_->setParamUseScanMatching(use_scan_matching_);
 
   // Update the occupancy grid
   if(updateMap())
